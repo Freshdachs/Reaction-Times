@@ -1,0 +1,39 @@
+---
+title: "Posterior Inference on Histogram"
+author: "Marcus Brenscheidt"
+date: "9/25/2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+For estimating human reaction times, we want to use data from the Platform Human Benchmark. The reaction times however are only available as a Histogram data. We face 2 challenges:
+1. Which model do we choose for our data?
+2. How do we infer a posterior distribution based on a histogram?
+
+# Getting the data
+Data for human reaction times are available as an aggregate statistic in a plot from Human Benchmark. Since the data is at first only visually available, we looked at the html code for the plot and found the original json-Data source. So we load the Histogram Data directly from the Human Benchmark as a json string and transform it into R datatypes.
+
+This is how we initalize the data:
+
+```{r}
+# data from HB histogram
+data_backup <- "[[100.0,356],[105.0,224],[110.0,242],[115.0,197],[120.0,124],[125.0,102],[130.0,58],[135.0,42],[140.0,50],[145.0,47],[150.0,132],[155.0,249],[160.0,332],[165.0,487],[170.0,864],[175.0,1297],[180.0,1981],[185.0,3244],[190.0,4383],[195.0,5362],[200.0,6986],[205.0,9344],[210.0,13285],[215.0,15412],[220.0,19350],[225.0,23433],[230.0,25925],[235.0,29517],[240.0,33990],[245.0,36126],[250.0,37764],[255.0,40064],[260.0,40188],[265.0,41213],[270.0,41240],[275.0,39233],[280.0,37815],[285.0,38181],[290.0,34601],[295.0,30424],[300.0,28837],[305.0,26339],[310.0,23172],[315.0,21715],[320.0,19828],[325.0,18128],[330.0,17492],[335.0,15354],[340.0,14415],[345.0,13540],[350.0,12661],[355.0,11716],[360.0,11777],[365.0,10293],[370.0,9459],[375.0,9978],[380.0,8309],[385.0,7715],[390.0,7356],[395.0,7076],[400.0,6733],[405.0,6546],[410.0,5816],[415.0,5564],[420.0,5214],[425.0,4880],[430.0,4914],[435.0,4623],[440.0,4452],[445.0,3777],[450.0,3652],[455.0,3642],[460.0,3851],[465.0,2925],[470.0,2902],[475.0,2888],[480.0,2960],[485.0,2499],[490.0,2515],[495.0,2228],[500.0,840]]"
+
+#load json
+library(jsonlite)
+data<-fromJSON("http://www.humanbenchmark.com/tests/reactiontime/statistics/data/monthly")
+```
+
+Now
+```{r}
+#fit splines
+library(MASS)
+fitdistr(rep(data[,1],data[,2]),"normal")
+fitted <- splinefun(data[,1],data[,2])
+fitted
+plot(fitted,from=100,to=500)
+```
