@@ -26,6 +26,7 @@ data_backup <- "[[100.0,356],[105.0,224],[110.0,242],[115.0,197],[120.0,124],[12
 #load json
 library(jsonlite)
 data<-fromJSON("http://www.humanbenchmark.com/tests/reactiontime/statistics/data/monthly")
+points <- rep(data[,1],data[,2]) # to actual measures
 ```
 
 Now
@@ -49,7 +50,47 @@ gen_p <- function(data) {
 }
 
 insert(data[,2],min(data[,1])/step_size(data),gen_bins(data))
-cp <- function(x)histprior(hist.data,,data[,2]/sum(data[,2]))
+cp <- function(x)histprior(hist.data,data[,2]/sum(data[,2]))
 
-density(1)
+```
+
+## Stan Model
+```{r}
+library(rstan)
+library(shinystan)
+
+prepare <- function(data) {y <- rep(data[,1],round(data[,2]/50 ));list(N = length(data[,1]), 
+                bins=data[,1],
+               total = length(y),#sum(data[,2]),
+                freqs=data[,2],
+                bin_radius=mean(data[-1,1]-data[-length(data[,1]),1]),
+                y = y)}
+
+prepare_min <- function(data) list(N = length(data[,1]), 
+                bins= data[,1],
+               total = data[1,2], #sum(data[1,2]),
+                freqs= data[,2],
+                bin_radius=mean(data[-1,1]-data[-length(data[,1]),1]))
+
+fit <- stan(file = 'reactiontimes.stan', data = prepare(data), iter = 1000, chains = 4)
+
+posterior<- apply(get_posterior_mean(fit),1,mean)
+
+
+hist(points, freq=FALSE)
+plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=100, to=500, add=T,col="red")
+plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=100, to=500, add=T,col="green")
+
+
+print(fit)
+
+```
+
+
+
+```{r}
+
+inv <- 1/(data[,2]/sum(data[,2]))
+
+
 ```
