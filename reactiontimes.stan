@@ -1,22 +1,34 @@
+// What is provided? reaction times
 data {
-  int<lower=0> N; // number of Observations total
-  real<lower=0> y[N]; //reaction time observations
+  // number of Observations total
+  int<lower=0> N;
+  //reaction time observations, distr. to some function
   
-  real<lower=0> sigma[J]; // s.e. of effect estimates 
+  //observed frequencies
+  vector[N] freqs;
+  //assumes sorted (lo -> hi) & least 2 equidistant bins 
+  vector[N] bins;
 }
 
 parameters {
-  real mu; 
-  real<lower=0> tau;
-  real eta[J];
-  real<lower=0> times[N];
+  real<lower=0> alpha;
+  real<lower=0> sigma;
+  vector[total]<lower=0> y;
 }
 
 transformed parameters {
-  real sigma2 = 1/tau;
+  //number of total participants
+  int<lower=0> total = sum(freqs)
+  
+  real<lower=0> bin_width = bins[1]-bins[0]
+  for(b in 1:n_bins){
+    (y-bin[b])*2/bin_width
+    freqs[i] = sum()
+  }
+  
 }
 
 model {
-  tau ~ gamma(0.001, 0.001);
-  y ~ normal(theta, sigma);
+  
+  y ~ weibull(alpha, sigma);
 }

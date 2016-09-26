@@ -36,4 +36,20 @@ fitdistr(rep(data[,1],data[,2]),"normal")
 fitted <- splinefun(data[,1],data[,2])
 fitted
 plot(fitted,from=100,to=500)
+
+library(LearnBayes)
+insert<-function(elems,i,ar){ar[i:(i+length(elems)-1)]=elems;ar}
+step_size<- function (data) mean(data[-1,1]-data[-length(data[,1]),1])
+gen_bins <- function(data) rep(max(data[,1])/step_size(data)+1)
+gen_steps <- function(data) seq(0,max(data[,1]),step_size(data))
+
+gen_p <- function(data) {
+  hist.data <- insert(data[,2],min(data[,1])/step_size(data),gen_bins(data))
+  function(x) histprior(hist.data,1:length(hist.data)/length(hist.data),data[,2]/sum(data[,2]))
+}
+
+insert(data[,2],min(data[,1])/step_size(data),gen_bins(data))
+cp <- function(x)histprior(hist.data,,data[,2]/sum(data[,2]))
+
+density(1)
 ```
