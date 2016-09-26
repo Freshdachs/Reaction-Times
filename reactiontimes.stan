@@ -18,10 +18,11 @@ parameters {
 
 transformed parameters {
   //number of total participants
-  int<lower=0> total = sum(freqs)
+  int<lower=0> total = sum(freqs);
   
-  real<lower=0> bin_width = bins[1]-bins[0]
+  real<lower=0> bin_radius = (bins[1]-bins[0])/2;
   for(b in 1:n_bins){
+    y[i]
     (y-bin[b])*2/bin_width
     freqs[i] = sum()
   }
@@ -29,6 +30,8 @@ transformed parameters {
 }
 
 model {
-  
+  for(b in 1:n_bins){
+    y[(sum(freqs[1:b])-freqs[b]):(sum(freqs[1:b])]~uniform(bins[b])
+  }
   y ~ weibull(alpha, sigma);
 }
