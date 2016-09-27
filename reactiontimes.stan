@@ -14,26 +14,21 @@ data {
   vector[total] y;
 }
 
-transformed data{
-  vector [total] inv_y;
-  for (i in 1:total){
-    inv_y[i] = 1/y[i];
-  }
-}
 
 parameters {
   real<lower=0> alpha;
   real<lower=0> sigma;
   real<lower=0> mu_n;
   real<lower=0> sigma_n;
-  real<lower=0> mu_i;
-  real<lower=0> sigma_i;
+  vector[total] y_dev;
   //vector[total] y;
 }
 
 transformed parameters {
   //real<lower=0> bin_radius;
   //bin_radius = (bins[2]-bins[1])/2;
+  vector[total] y_star;
+  y_star = y + y_dev;
 }
 
 model {
@@ -46,9 +41,7 @@ model {
   sigma ~ uniform(0.001,500);
   mu_n ~ uniform(0,500);
   sigma_n ~ uniform(0,500);
-  mu_i ~ uniform(0,1);
-  sigma_i ~ uniform(0,1);
-  y ~ weibull(alpha, sigma);
-  y ~ normal(mu_n, sigma_n);
-  inv_y ~normal(mu_i,sigma_i);
+  y_dev ~ uniform(-bin_radius, bin_radius);
+  y_star ~ weibull(alpha, sigma);
+  y_star ~ normal(mu_n, sigma_n);
 }
