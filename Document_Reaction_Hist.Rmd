@@ -72,7 +72,7 @@ prepare_min <- function(data) list(N = length(data[,1]),
                 freqs= data[,2],
                 bin_radius=mean(data[-1,1]-data[-length(data[,1]),1]))
 
-fit <- stan(file = 'reactiontimes.stan', data = prepare(data), iter = 1000, chains = 4)
+fit <- stan(file = 'reactiontimes.stan', data = prepare(data), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n"))
 
 posterior<- apply(get_posterior_mean(fit),1,mean)
 
@@ -81,16 +81,15 @@ hist(points, freq=FALSE)
 plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=100, to=500, add=T,col="red")
 plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=100, to=500, add=T,col="green")
 
-
+library(retimes)
+pars<- mexgauss(points)
+plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=0, to=500, add=T, col="blue")
+legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian"), col=c("green","red","blue"), lwd=5, cex=.5, horiz = FALSE)
 print(fit)
 
-```
-
-
-
-```{r}
-
-inv <- 1/(data[,2]/sum(data[,2]))
-
+launch_shinystan(fit)
 
 ```
+
+
+
