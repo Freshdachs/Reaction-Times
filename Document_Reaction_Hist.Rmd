@@ -58,21 +58,31 @@ cp <- function(x)histprior(hist.data,data[,2]/sum(data[,2]))
 ```{r}
 library(rstan)
 library(shinystan)
+bin_radius <- function(data) mean(data[-1,1]-data[-length(data[,1]),1])
+
+#Generate iCDF for data
+gen_icdf<- function(data){ 
+  cmf <- sapply(1:length(data[,1]),function(i)sum(data[1:i,2])/sum(data[,2]))
+   function(x)sapply(x,function(y)data[min(which(cmf>=y)),1])
+}
+
+rhist <- function(n, data) sapply(runif(n),gen_icdf(data))
 
 prepare <- function(data) {y <- rep(data[,1],round(data[,2]/50 ));list(N = length(data[,1]), 
                 bins=data[,1],
                total = length(y),#sum(data[,2]),
                 freqs=data[,2],
-                bin_radius=mean(data[-1,1]-data[-length(data[,1]),1]),
+                bin_radius= bin_radius(data),
                 y = y)}
 
-prepare_min <- function(data) list(N = length(data[,1]), 
-                bins= data[,1],
-               total = data[1,2], #sum(data[1,2]),
-                freqs= data[,2],
-                bin_radius=mean(data[-1,1]-data[-length(data[,1]),1]))
+prepare_synth<-function(data, n=1000) list(total=n,y=rhist(1000,data))
 
-fit <- stan(file = 'reactiontimes.stan', data = prepare(data), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n"))
+
+init <- function(data) function(chain_id)list(y_star=list(uniform=list(lower=min(data[,1])-bin_radius(data),upper=max(data[,1])+bin_radius(data))), tau_e = list(uniform=list(lower=0,upper=100)), sigma_e = list(uniform=list(lower=0,upper=500)), mu_e = list(uniform=list(lower=0,upper=500)))
+
+
+model <- stan_model(file = 'reactiontimes.stan')
+fit <- sampling(model, data = prepare_synth(data), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"), init=init(data))
 
 posterior<- apply(get_posterior_mean(fit),1,mean)
 
@@ -80,16 +90,40 @@ posterior<- apply(get_posterior_mean(fit),1,mean)
 hist(points, freq=FALSE)
 plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=100, to=500, add=T,col="red")
 plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=100, to=500, add=T,col="green")
-
+plot(function(x)dexgauss( x,posterior["mu_e"],posterior["sigma_e"],posterior["lambda_e"]^-1),from=0, to=500, add=T, col="blue")
 library(retimes)
 pars<- mexgauss(points)
-plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=0, to=500, add=T, col="blue")
+plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=0, to=500, add=T, col="violet")
 legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian"), col=c("green","red","blue"), lwd=5, cex=.5, horiz = FALSE)
 print(fit)
 
 launch_shinystan(fit)
 
+#200, 300 data points, as data into stan
+
+
+
 ```
 
 
+# Sampling Reaction time models with reaction time data from paper
+```{r}
+RT <- c(474.688, 506.445, 524.081, 530.672, 530.869,566.984, 582.311, 582.940, 603.574, 792.358)
 
+prepare_vec <- function(y) list(total=length(y),y=y)
+
+model <- stan_model(file = 'reactiontimes.stan')
+
+fit <- sampling(model, data = prepare_vec(RT), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"))
+
+posterior<- apply(get_posterior_mean(fit),1,mean)
+
+hist(RT, freq=FALSE)
+plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=450, to=800, add=T,col="red")
+plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=450, to=800, add=T,col="green")
+plot(function(x)dexgauss( x,posterior["mu_e"],posterior["sigma_e"],posterior["lambda_e"]^-1),from=450, to=800, add=T, col="blue")
+library(retimes)
+pars<- mexgauss(points)
+plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=450, to=800, add=T, col="violet")
+legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian"), col=c("green","red","blue"), lwd=5, cex=.5, horiz = FALSE)
+```
