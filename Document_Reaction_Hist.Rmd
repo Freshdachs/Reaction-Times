@@ -84,6 +84,7 @@ We use Stan to generate samples which estimate the parameters for weibull/normal
 library(rstan)
 library(shinystan)
 library(retimes)
+library(loo)
 
 #Generate iCDF for data
 gen_icdf<- function(data){ 
@@ -98,6 +99,9 @@ prepare<-function(data, n=1000,m=20) list(total=n,y=rhist(n,data),star_size=m)
 prepare_pure <- function(data)list(total=length(data),y=data,star_size=m)
 
 
+primary_cols <- list(green= "#5FF847",turkis= "#35CEC7",blue= "#6A95FB",pink= "#C63AA0",orange= "#FF8C09",fancy_pink= "#FF0961",dark_blue= "#032F5E")
+par(bg="black",col.lab="white",fg="white",col.axis="white",col.main="white")
+
 init <- function(data) function(chain_id)list(tau_e = list(uniform=list(lower=0,upper=100)), sigma_e = list(uniform=list(lower=0,upper=500)), mu_e = list(uniform=list(lower=0,upper=500)))
 
 
@@ -110,17 +114,19 @@ fit <- sampling(model, data = prepare_pure(data_core$time), iter = 1000, chains 
 
 posterior<- function(fit)apply(get_posterior_mean(fit),1,mean)
 
-comp<-function(points,posterior){
+comp<-function(points,posterior, title="Histogram"){
   #plotting
-  hist(points, freq=FALSE, ylim =c(0,0.01),breaks = 30)
+  par(bg="black",col.lab="white",fg="white",col.axis="white",col.main="white",lwd=1.5)
+  hist(points, freq=FALSE,breaks = 30, main=title)
   bounds <- par("usr")
-  plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=bounds[1], to=bounds[2], add=T,col="red")
-  plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=bounds[1], to=bounds[2], add=T,col="green")
-  plot(function(x)dexgauss( x,posterior["mu_e"],posterior["sigma_e"],posterior["lambda_e"]^-1),from=bounds[1], to=bounds[2], add=T, col="blue")
+  width<-3
+  plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=bounds[1], to=bounds[2], add=T,col=primary_cols$green,lwd=width)
+  plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=bounds[1], to=bounds[2], add=T,col=primary_cols$turkis,lwd=width)
+  plot(function(x)dexgauss( x,posterior["mu_e"],posterior["sigma_e"],posterior["lambda_e"]^-1),from=bounds[1], to=bounds[2], add=T, col=primary_cols$fancy_pink,lwd=width)
   library(retimes)
   pars<- mexgauss(points)
-  plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=bounds[1], to=bounds[2], add=T, col="violet")
-  legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian"), col=c("green","red","blue"), lwd=5, cex=.5, horiz = FALSE)
+  plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=bounds[1], to=bounds[2], add=T, col=primary_cols$orange,lwd=width)
+  legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian","med-gaussian"), col=c(primary_cols$green,primary_cols$turkis,primary_cols$fancy_pink,primary_cols$orange), lwd=5, cex=.5, horiz = FALSE)
   print(fit)
 }
 

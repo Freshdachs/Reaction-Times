@@ -13,7 +13,7 @@ data {
   int<lower=0> total;
   vector[total] y;
   int<lower=0> star_size;
-  real<lower=0> q;#quantile we want to observe
+  real<lower=0> q;#proportion
 }
 
 
@@ -27,15 +27,13 @@ parameters {
   real<lower=0> lambda_e;
   vector[star_size] y_star;
   real<lower=0, upper=1> quant;
-  real<lower=0> dec;
+  vector[total] dec;
   //vector[total] y;
 }
 
 transformed parameters {
-  vector[total] dec;
-  for ( i in 1:total){
-    u <- 
-  }
+
+  
 }
 
 model {
@@ -59,4 +57,11 @@ model {
   y ~ normal(mu_n, sigma_n);
   y ~ exp_mod_normal(mu_e,sigma_e,lambda_e);
   y_star ~ exp_mod_normal(mu_e,sigma_e,lambda_e);
+  for ( i in 1:total){
+    if (dec[i]){
+      y[i] ~ exp_mod_normal(mu_e,sigma_e,lambda_e);
+    } else {
+      y[i]~ uniform(500,2000)
+    }
+  }
 }
