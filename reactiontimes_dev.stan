@@ -13,6 +13,7 @@ data {
   int<lower=0> total;
   vector[total] y;
   int<lower=0> star_size;
+  real<lower=0> q;#quantile we want to observe
 }
 
 
@@ -25,13 +26,24 @@ parameters {
   real<lower=0> sigma_e;
   real<lower=0> lambda_e;
   vector[star_size] y_star;
+  real<lower=0, upper=1> quant;
+  real<lower=0> dec;
+  //vector[total] y;
 }
 
+transformed parameters {
+  vector[total] dec;
+  for ( i in 1:total){
+    u <- 
+  }
+}
 
 model {
   /*for(b in 1:N){
     y[(sum(freqs[1:b])-freqs[b]+1):(sum(freqs[1:b]))] ~ uniform(bins[b]-bin_radius, bins[b]+ bin_radius);
   }*/
+  dec ~ bernoulli(q);
+  quant ~uniform(0,1)
   
   alpha ~ uniform(0.001,1000);
   sigma ~ uniform(0.001,1000);

@@ -17,6 +17,8 @@ For estimating human reaction times, we want to use data from the Platform Human
 # Getting the data
 Data for human reaction times are available as an aggregate statistic in a plot from Human Benchmark. Since the data is at first only visually available, we looked at the html code for the plot and found the original json-Data source. So we load the Histogram Data directly from the Human Benchmark as a json string and transform it into R datatypes.
 
+Furthermore, we provide our own data over github, which is also available in the JSON format. 
+
 This is how we initalize the data:
 
 ```{r}
@@ -27,9 +29,40 @@ data_backup <- "[[100.0,356],[105.0,224],[110.0,242],[115.0,197],[120.0,124],[12
 library(jsonlite)
 data<-fromJSON("http://www.humanbenchmark.com/tests/reactiontime/statistics/data/monthly")
 points <- rep(data[,1],data[,2]) # to actual measures
+
+# Raw JSON Object, needs to be converted to a dataframe
+raw_data <- fromJSON("https://raw.githubusercontent.com/Freshdachs/Reaction-Times/master/data.json")
+
+# convert a raw JSON Object to a raw dataframe
+to_raw_df <- function(df) {
+  tmp <- list()
+  l<-1
+  for (i in 1:length(df$name)) {
+    person <- t(df)[,i]
+    for (j in 1:length(person$games[,1])){
+      game <- person$games[j,]
+      for (time in game$times[[1]]){
+        tmp[[l]] <- list(name=person$name,gender=person$gender,age=person$age,datetime=game$datetime,type=game$type,time=time)
+        l <- l+1
+      }
+    }
+  }
+  as.data.frame(do.call(rbind,tmp))
+}
+
+# convert a raw JSON Object to a nice dataframe
+to_df<-function(data){
+  raw <- to_raw_df(data)
+  raw$datetime <- lapply(raw$datetime,function(dt)  strptime(dt, "%F %R:%S") )
+  raw$time <- unlist(raw$time)
+  raw
+}
+
+data_core<-to_df(raw_data)
 ```
 
-Now
+# First exploration
+We try to look at data and try to fit it with splines. This is an easy but powerful way to fit arbitrary functions.
 ```{r}
 #fit splines
 library(MASS)
@@ -37,28 +70,20 @@ fitdistr(rep(data[,1],data[,2]),"normal")
 fitted <- splinefun(data[,1],data[,2])
 fitted
 plot(fitted,from=100,to=500)
-
-library(LearnBayes)
-insert<-function(elems,i,ar){ar[i:(i+length(elems)-1)]=elems;ar}
-step_size<- function (data) mean(data[-1,1]-data[-length(data[,1]),1])
-gen_bins <- function(data) rep(max(data[,1])/step_size(data)+1)
-gen_steps <- function(data) seq(0,max(data[,1]),step_size(data))
-
-gen_p <- function(data) {
-  hist.data <- insert(data[,2],min(data[,1])/step_size(data),gen_bins(data))
-  function(x) histprior(hist.data,1:length(hist.data)/length(hist.data),data[,2]/sum(data[,2]))
-}
-
-insert(data[,2],min(data[,1])/step_size(data),gen_bins(data))
-cp <- function(x)histprior(hist.data,data[,2]/sum(data[,2]))
-
 ```
 
-## Stan Model
+# Stan Model
+Next, we want to fit our model with Stan. We look at 3 possible distribution:
+  1. weibull
+  2. normal
+  3. ex-gaussian
+
+We use Stan to generate samples which estimate the parameters for weibull/normal/ex-gaussian.
+
 ```{r}
 library(rstan)
 library(shinystan)
-bin_radius <- function(data) mean(data[-1,1]-data[-length(data[,1]),1])
+library(retimes)
 
 #Generate iCDF for data
 gen_icdf<- function(data){ 
@@ -68,41 +93,45 @@ gen_icdf<- function(data){
 
 rhist <- function(n, data) sapply(runif(n),gen_icdf(data))
 
-prepare <- function(data) {y <- rep(data[,1],round(data[,2]/50 ));list(N = length(data[,1]), 
-                bins=data[,1],
-               total = length(y),#sum(data[,2]),
-                freqs=data[,2],
-                bin_radius= bin_radius(data),
-                y = y)}
+prepare<-function(data, n=1000,m=20) list(total=n,y=rhist(n,data),star_size=m)
 
-prepare_synth<-function(data, n=1000) list(total=n,y=rhist(1000,data))
+prepare_pure <- function(data)list(total=length(data),y=data,star_size=m)
 
 
-init <- function(data) function(chain_id)list(y_star=list(uniform=list(lower=min(data[,1])-bin_radius(data),upper=max(data[,1])+bin_radius(data))), tau_e = list(uniform=list(lower=0,upper=100)), sigma_e = list(uniform=list(lower=0,upper=500)), mu_e = list(uniform=list(lower=0,upper=500)))
+init <- function(data) function(chain_id)list(tau_e = list(uniform=list(lower=0,upper=100)), sigma_e = list(uniform=list(lower=0,upper=500)), mu_e = list(uniform=list(lower=0,upper=500)))
 
 
 model <- stan_model(file = 'reactiontimes.stan')
-fit <- sampling(model, data = prepare_synth(data), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"), init=init(data))
+fit <- sampling(model, data = prepare(data), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e","y_star"), init=init(data))
 
-posterior<- apply(get_posterior_mean(fit),1,mean)
+fit <- sampling(model, data = prepare_pure(sample(data_core$time[data_core$type!="Trial"],1000,replace=T)), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"), init=init(data))
 
+fit <- sampling(model, data = prepare_pure(data_core$time), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"), init=init(data))
 
-hist(points, freq=FALSE)
-plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=100, to=500, add=T,col="red")
-plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=100, to=500, add=T,col="green")
-plot(function(x)dexgauss( x,posterior["mu_e"],posterior["sigma_e"],posterior["lambda_e"]^-1),from=0, to=500, add=T, col="blue")
-library(retimes)
-pars<- mexgauss(points)
-plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=0, to=500, add=T, col="violet")
-legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian"), col=c("green","red","blue"), lwd=5, cex=.5, horiz = FALSE)
-print(fit)
+posterior<- function(fit)apply(get_posterior_mean(fit),1,mean)
 
-launch_shinystan(fit)
+comp<-function(points,posterior){
+  #plotting
+  hist(points, freq=FALSE, ylim =c(0,0.01),breaks = 30)
+  bounds <- par("usr")
+  plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=bounds[1], to=bounds[2], add=T,col="red")
+  plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=bounds[1], to=bounds[2], add=T,col="green")
+  plot(function(x)dexgauss( x,posterior["mu_e"],posterior["sigma_e"],posterior["lambda_e"]^-1),from=bounds[1], to=bounds[2], add=T, col="blue")
+  library(retimes)
+  pars<- mexgauss(points)
+  plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=bounds[1], to=bounds[2], add=T, col="violet")
+  legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian"), col=c("green","red","blue"), lwd=5, cex=.5, horiz = FALSE)
+  print(fit)
+}
 
-#200, 300 data points, as data into stan
+comp(data_core$time,posterior(fit))
 
-
-
+# Now we can do inference:
+# p-test: are you worse than 95% of all
+worse_than <- function(q,fit) sort(extract(fit)$y_star)[q*length(extract(fit)$y_star)]
+# Inference!
+worse_than(0.95,fit)
+#launch_shinystan(fit)
 ```
 
 
@@ -110,20 +139,12 @@ launch_shinystan(fit)
 ```{r}
 RT <- c(474.688, 506.445, 524.081, 530.672, 530.869,566.984, 582.311, 582.940, 603.574, 792.358)
 
-prepare_vec <- function(y) list(total=length(y),y=y)
 
 model <- stan_model(file = 'reactiontimes.stan')
 
-fit <- sampling(model, data = prepare_vec(RT), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"))
+fit_paper <- sampling(model, data = prepare_pure(RT), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"))
 
-posterior<- apply(get_posterior_mean(fit),1,mean)
+posterior_paper<- apply(get_posterior_mean(fit_paper),1,mean)
 
-hist(RT, freq=FALSE)
-plot(function(x)dweibull(x,posterior["alpha"],posterior["sigma"]),from=450, to=800, add=T,col="red")
-plot(function(x)dnorm(x,posterior["mu_n"],posterior["sigma_n"]),from=450, to=800, add=T,col="green")
-plot(function(x)dexgauss( x,posterior["mu_e"],posterior["sigma_e"],posterior["lambda_e"]^-1),from=450, to=800, add=T, col="blue")
-library(retimes)
-pars<- mexgauss(points)
-plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=450, to=800, add=T, col="violet")
-legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian"), col=c("green","red","blue"), lwd=5, cex=.5, horiz = FALSE)
+comp(RT,posterior(fit_paper))
 ```
