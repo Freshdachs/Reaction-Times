@@ -55,6 +55,7 @@ to_df<-function(data){
   raw <- to_raw_df(data)
   raw$datetime <- lapply(raw$datetime,function(dt)  strptime(dt, "%F %R:%S") )
   raw$time <- unlist(raw$time)
+  raw$name <- unlist(raw$name)
   raw
 }
 
@@ -106,17 +107,21 @@ init <- function(data) function(chain_id)list(tau_e = list(uniform=list(lower=0,
 
 
 model <- stan_model(file = 'reactiontimes.stan')
+
+#nopred
+fit <- sampling(model, data = prepare(data), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e","log_lik","log_lik_norm","log_lik_weib"), init=init(data))
+
 fit <- sampling(model, data = prepare(data), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e","y_star"), init=init(data))
 
-fit <- sampling(model, data = prepare_pure(sample(data_core$time[data_core$type!="Trial"],1000,replace=T)), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"), init=init(data))
+fit <- sampling(model, data = prepare_pure(sample(data_core$time[data_core$type!="Trial"],1000,replace=T)), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e","log_lik","log_lik_norm","log_lik_weib"), init=init(data))
 
-fit <- sampling(model, data = prepare_pure(data_core$time), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e"), init=init(data))
+fit <- sampling(model, data = prepare_pure(data_core$time), iter = 1000, chains = 4, pars=c("alpha","sigma","mu_n", "sigma_n","mu_e","sigma_e","lambda_e","y_star"), init=init(data))
 
 posterior<- function(fit)apply(get_posterior_mean(fit),1,mean)
 
 comp<-function(points,posterior, title="Histogram"){
   #plotting
-  par(bg="black",col.lab="white",fg="white",col.axis="white",col.main="white",lwd=1.5)
+  par(bg=NA,col.lab="white",fg="white",col.axis="white",col.main="white",lwd=1.5)
   hist(points, freq=FALSE,breaks = 30, main=title)
   bounds <- par("usr")
   width<-3
@@ -125,19 +130,63 @@ comp<-function(points,posterior, title="Histogram"){
   plot(function(x)dexgauss( x,posterior["mu_e"],posterior["sigma_e"],posterior["lambda_e"]^-1),from=bounds[1], to=bounds[2], add=T, col=primary_cols$fancy_pink,lwd=width)
   library(retimes)
   pars<- mexgauss(points)
-  plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=bounds[1], to=bounds[2], add=T, col=primary_cols$orange,lwd=width)
-  legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian","med-gaussian"), col=c(primary_cols$green,primary_cols$turkis,primary_cols$fancy_pink,primary_cols$orange), lwd=5, cex=.5, horiz = FALSE)
+  #plot(function(x)dexgauss( x,pars["mu"],pars["sigma"],pars["tau"]),from=bounds[1], to=bounds[2], add=T, col=primary_cols$orange,lwd=width)
+  legend(x = "topright",inset = 0,legend = c("weibull", "normal", "ex-gaussian"), col=c(primary_cols$green,primary_cols$turkis,primary_cols$fancy_pink), lwd=5, cex=.5, horiz = FALSE)
   print(fit)
 }
 
-comp(data_core$time,posterior(fit))
+comp(points,posterior(fit),"Models vs. Histogram")
+
+comp(data_core$time,posterior(fit),"Normal vs. Histogram")
+
+comp(points,posterior(fit),"Normal vs. Histogram")
 
 # Now we can do inference:
 # p-test: are you worse than 95% of all
 worse_than <- function(q,fit) sort(extract(fit)$y_star)[q*length(extract(fit)$y_star)]
 # Inference!
 worse_than(0.95,fit)
-#launch_shinystan(fit)
+launch_shinystan(fit)
+
+
+#quality estimation
+qual <- function(fit,name){
+  log_lik <- extract_log_lik(fit,name)
+  list(loo=loo(log_lik),wAIC=waic(log_lik))
+}
+log_lik <- qual(fit,"log_lik")
+log_lik_norm <- qual(fit,"log_lik_norm")
+log_lik_weib <- qual(fit,"log_lik_weib")
+
+
+
+par(bg=NA,col.lab="white",fg="white",col.axis="white",col.main="white",lwd=1.5)
+par(mar=c(5,5,1,1))
+
+plot(density(points),main="",xlim=c(100,600),ylim=c(0,0.018),col=primary_cols$turkis,xlab="RT in ms")
+lines(density(pts),add=T,main="",col=primary_cols$orange)
+legend(x = "topright",inset = 0,legend = c("HB.com     ", "You"), col=c(primary_cols$turkis,primary_cols$orange), lwd=5, cex=1, horiz = FALSE)
+
+
+boxplot(time~name,data=data_core[data_core$type!="Trial",],  ylab="RT in ms",names=sort(unique(data_core$name)),las=2,col=primary_cols$fancy_pink)
+
+boxplot(mpg~cyl,data=mtcars, main="Car Milage Data", xlab="Number of Cylinders", ylab="Miles Per Gallon")
+
+#plot densities against each other
+
+
+
+set.seed(100)
+d <- diamonds[sample(nrow(diamonds), 1000), ]
+
+p <- ggplot(data = data_core, aes(x = name, y = time)) +
+  geom_point(aes(text = paste("Clarity:", name)), size = 4) +
+  geom_smooth(aes(colour = cut, fill = cut)) + facet_wrap(~ cut)
+
+ggplotly(p)
+
+
+midwest
 ```
 
 
